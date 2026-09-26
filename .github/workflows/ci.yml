@@ -1,4 +1,4 @@
-name: CI
+name: CI/CD Pipeline
 
 on:
   push:
@@ -9,6 +9,17 @@ on:
 jobs:
   build-and-test:
     runs-on: ubuntu-latest
+
+    # Optional: Spin up a MySQL test service so server startup does not fail on DB connection
+    services:
+      mysql:
+        image: mysql:8.0
+        env:
+          MYSQL_ALLOW_EMPTY_PASSWORD: "yes"
+          MYSQL_DATABASE: products
+        ports:
+          - 3307:3306
+        options: --health-cmd="mysqladmin ping" --health-interval=10s --health-timeout=5s --health-retries=3
 
     steps:
       - name: Checkout code
@@ -25,19 +36,20 @@ jobs:
 
       - name: Verify server starts without crashing
         run: |
-          timeout 10s node server.js &
+          node server.js &
           SERVER_PID=$!
-          sleep 3
-          kill $SERVER_PID 2>/dev/null || true
+          sleep 4
+          kill -0 $SERVER_PID
+          kill $SERVER_PID
         env:
-          DB_HOST: localhost
+          DB_HOST: 127.0.0.1
           DB_USER: root
           DB_PASSWORD: ""
           DB_NAME: products
-          DB_PORT: 3306
-          PORT: 3000
+          DB_PORT: 3308
+          PORT: 3002
 
-      - name: Build Docker image
+      - name: Test Docker build
         run: docker build -t product-crud-api:${{ github.sha }} .
 
   deploy:
@@ -58,4 +70,10 @@ jobs:
             docker build -t product-crud-api .
             docker stop product-crud-api || true
             docker rm product-crud-api || true
-            docker run -d --name product-crud-api -p 3000:3000 --env-file .env product-crud-api
+            docker run -d \
+              --name product-crud-api \
+              --restart unless-stopped \
+              -p 3000:3000 \
+              --env-file .env \
+              product-crud-api
+            docker image prune -f
