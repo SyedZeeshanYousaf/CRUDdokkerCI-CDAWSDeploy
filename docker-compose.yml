@@ -24,7 +24,7 @@ services:
     container_name: product-crud-api
     restart: unless-stopped
     ports:
-      - "3000:3000"
+      - "5000:3000"
     environment:
       DB_HOST: db
       DB_USER: root
